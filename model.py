@@ -147,7 +147,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             if self.splitmerge:
                 for _ in range(self.maxiter_splitmerge):
                     self.Z, self.logP_A, self.logP_Z, = self.splitmerge_sample_Z(self.Z, self.logP_A, self.logP_Z)
-        
+            
             self.sumZ = np.sum(self.Z, axis=1) # no. nodes in each cluster
             ind = np.argsort(-self.sumZ) # sort clusters by size (descending)
             self.Z = self.Z[ind,:] # sort partion matrix by cluster size
@@ -218,7 +218,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         #for s in range(self.S): # for each subject
         #    n_link[:, :, s] = Z @ self.A[:, :, s] @ Z.T # clever way to extract all the relevant links for each pair of clusters
         #    n_link[:, :, s] = n_link[:, :, s] - 0.5 * np.diag(np.diag(n_link[:, :, s])) + self.eta0[s] # subtracting half of the diagonal from the diagonal (since we actually count the diognal twice in the line above) and adding the probability of linking between clusters  
-        n_link = np.stack([Z @ self.A[:, :, s] @ Z.T for s in range(self.S)],axis=2) # alternative
+        n_link = np.stack([Z @ self.A[:, :, s] @ Z.T for s in range(self.S)], axis=2) # alternative
         n_link = np.stack([n_link[:, :, s] - 0.5 * np.diag(np.diag(n_link[:, :, s])) + self.eta0[s] for s in range(self.S)], axis=2) # alternative
 
         mult_eval = self.multinomialln(n_link) # compute (multinomial) log likelihood of number of links between clusters, log Beta(nlink+eta0)
@@ -506,10 +506,12 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         #    randneta0_list = scipy.io.loadmat('matlab_randvar/randneta0.mat')['randneta0_list'].ravel() # TESTING
         #    randeta0_list = scipy.io.loadmat('matlab_randvar/randeta0.mat')['randeta0_list'].ravel() # TESTING
         
-        n_link_noeta0 = np.zeros((self.noc, self.noc, self.S))
-        for s in range(self.S):
-            n_link_noeta0[:,:,s] = self.Z @ self.A[:,:,s] @ self.Z.T
-            n_link_noeta0[:,:,s] = n_link_noeta0[:,:,s] - 0.5 * np.diag(np.diag(n_link_noeta0[:,:,s]))
+        #n_link_noeta0 = np.zeros((self.noc, self.noc, self.S))
+        #for s in range(self.S):
+        #    n_link_noeta0[:,:,s] = self.Z @ self.A[:,:,s] @ self.Z.T
+        #    n_link_noeta0[:,:,s] = n_link_noeta0[:,:,s] - 0.5 * np.diag(np.diag(n_link_noeta0[:,:,s]))
+        n_link_noeta0 = np.stack([self.Z @ self.A[:, :, s] @ self.Z.T for s in range(self.S)], axis=2) # alternative
+        n_link_noeta0 = np.stack([n_link_noeta0[:, :, s] - 0.5 * np.diag(np.diag(n_link_noeta0[:, :, s])) for s in range(self.S)], axis=2) # alternative
 
         n_link = n_link_noeta0 + self.eta0
         #const = self.multinomialln(self.eta0)
@@ -523,10 +525,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 #else:
                 randneta0 = np.random.randn() 
                 eta_new = np.exp(np.log(self.eta0[s]) + 0.1 * randneta0)  # symmetric proposal distribution in log-domain (use change of variable in acceptance rate alpha_new/alpha)
-                eta0_new = np.copy(self.eta0)
+                eta0_new = self.eta0.copy()
                 eta0_new[s] = eta_new
                 const_new = self.multinomialln(eta0_new)
-                n_link_new = np.copy(n_link)
+                n_link_new = n_link.copy()
                 n_link_new[:,:,s] = n_link_noeta0[:,:,s] + eta_new
                 logP_A_new = np.sum(np.triu(self.multinomialln(n_link_new))) - self.noc*(self.noc+1)/2 * const_new
                 
@@ -576,12 +578,13 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         return np.sum(gammaln(x), axis=-1) - gammaln(np.sum(x, axis=-1))
 
     def calculate_eta(self):
-        ZAZt = np.zeros((self.noc, self.noc, self.S))
-
-        for s in range(self.S):
-            ZAZt[:,:,s] = self.Z @ self.A[:,:,s] @ self.Z.T
-            ZAZt[:,:,s] = ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s]
-        
+        #ZAZt = np.zeros((self.noc, self.noc, self.S))
+        #for s in range(self.S):
+        #    ZAZt[:,:,s] = self.Z @ self.A[:,:,s] @ self.Z.T
+        #    ZAZt[:,:,s] = ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s] 
+        ZAZt = np.stack([self.Z @ self.A[:,:,s] @ self.Z.T for s in range(self.S)], axis=2) # alternative
+        ZAZt = np.stack([ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s] for s in range(self.S)], axis=2) # alternativ
+          
         sum_ZAZt = np.sum(ZAZt, axis=2)
         self.eta = ZAZt/sum_ZAZt[:,:,np.newaxis]
 
