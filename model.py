@@ -13,7 +13,7 @@ import time
 import scipy.io
 from data_processors import generate_syndata, compute_A
 
-os.environ["OMP_NUM_THREADS"] = "2"  # set number of threads to 4
+os.environ["OMP_NUM_THREADS"] = "2"  # set number of threads
 
 class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to MultinomialSBM
     # Non-parametric IRM of uni-partite undirected graphs based on collapsed Gibbs sampling
@@ -37,7 +37,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
     # eta           Estimated of noc x noc x S clustering probabilities (where noc is estimated number of clusters)
     # alpha         Estimated value of alpha (hyperparameter for the Dirichlet prior on eta)
     # eta0          Estimated value of 1 x S vector of clustering probabilities
-    # MAP           MAP estimates for all 9 parameters described above
+    # MAP           MAP estimates for each parameter described above
     
     # Original Matlab version of code is written by Morten Mørup (name: IRMUnipartiteMultinomial.m)
     # Python version of code and modifications is written by Nina Iskov
@@ -69,7 +69,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         self.maxiter_splitmerge = config.maxiter_splitmerge 
         #self.matlab_compare = config.matlab_compare
         #self.unit_test = config.unit_test
-        #self.abstol = 1e-9 # absolute tolerance used for unit tests
+        #self.reltol = 1e-9 # relative tolerance used for unit tests
     
         # Miscellaneous.
         self.main_dir = config.main_dir
@@ -159,7 +159,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             # Sample eta0
             self.sample_eta0() # input: A, Z, eta0. Output: logP_A, eta0
             
-            # Calculate eta (we compute expected value of posterior of eta, just in case we want to say something about it later)
+            # Calculate eta (we compute expected value of posterior of eta)
             self.calculate_eta() # input: Z, eta0. Output: eta
             
             # Evaluate result
@@ -169,7 +169,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             
             # Display iteration
             if self.it % 1 == 0 and self.disp:
-                print(f"{self.it:12.0f} | {logP:12.4e} | {dlogP/np.abs(logP):12.4e} | {self.noc:12.0f} | {elapsed_time:12.4f}")
+                print(f"{self.it:12.0f} | {logP:12.4e} | {dlogP/abs(logP):12.4e} | {self.noc:12.0f} | {elapsed_time:12.4f}")
 
             # Store sample
             if self.it % self.sample_step == 0:
@@ -197,7 +197,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         # Display final iteration
         print('Result of final iteration')
         print('%12s | %12s | %12s | %12s | %12s ' % ('iter', 'logP', 'dlogP/|logP|', 'noc', 'time'))
-        print('%12.0f | %12.4e | %12.4e | %12.0f | %12.4f ' % (self.it, logP, dlogP/np.abs(logP), self.noc, elapsed_time))
+        print('%12.0f | %12.4e | %12.4e | %12.0f | %12.4f ' % (self.it, logP, dlogP/abs(logP), self.noc, elapsed_time))
 
 
 ############################################################### Gibbs sampler ###############################################################
@@ -528,11 +528,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 const_new = self.multinomialln(eta0_new)
                 n_link_new = np.copy(n_link)
                 n_link_new[:,:,s] = n_link_noeta0[:,:,s] + eta_new
-                #logP_A_new = np.triu(self.multinomialln(n_link_new)).sum() - self.noc*(self.noc+1)/2 * const_new
                 logP_A_new = np.sum(np.triu(self.multinomialln(n_link_new))) - self.noc*(self.noc+1)/2 * const_new
                 
                 #if self.unit_test:
-                #    self.unit_test_MH_eta0(eta0_new = eta0_new, logP_A_new = logP_A_new, logP_A = self.logP_A) #inputs: eta0_new, logP_A_new, logP_A, alpha_new=None, logP_Z_new=None, logP_Z=None
+                #    self.unit_test_MH_eta0(eta0_new = eta0_new, logP_A_new = logP_A_new, logP_A = self.logP_A)
                 
                 #if self.matlab_compare:
                 #    randeta0 = randeta0_list[i]
@@ -634,10 +633,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             a1 = logP_A_tmp1 + logP_Z_tmp1 - (logP_A_tmp2 + logP_Z_tmp2)
             a2 = logQ[noc_tmp1] - logQ[noc_tmp2]
             
-        absdiff = np.abs(a1 - a2)
-        if absdiff > self.abstol:
+        reldiff = (a1-a2)/abs(a2)
+        if reldiff > self.reltol:
             print('Gibbs unit test failed for node', str(i))
-            print('absdiff: ', absdiff)
+            print('reldiff: ', reldiff)
         #else:
         #    print('Gibbs unit test passed')
     
@@ -646,10 +645,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         logP_A_tmp_new, _ = self.evalProbs(self.Z, eta0_new, self.alpha)
         a1 = logP_A_tmp_new - logP_A_tmp
         a2 = logP_A_new - logP_A
-        absdiff = np.abs(a1 - a2)
-        if absdiff > self.abstol:
+        reldiff = (a1-a2)/abs(a2)
+        if reldiff > self.reltol:
             print('MH eta0 unit test failed')
-            print('absdiff: ', absdiff)
+            print('reldiff: ', reldiff)
         #else:
         #    print('MH eta0 unit test passed')
             
@@ -658,10 +657,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         _ , logP_Z_tmp_new = self.evalProbs(self.Z, self.eta0, alpha_new)
         a1 = logP_Z_tmp_new - logP_Z_tmp
         a2 = logP_Z_new - logP_Z
-        absdiff = np.abs(a1 - a2)
-        if absdiff > self.abstol:
+        reldiff = (a1-a2)/abs(a2)
+        if reldiff > self.reltol:
             print('MH alpha unit test failed')
-            print('absdiff: ', absdiff)
+            print('reldiff: ', reldiff)
         #else:
         #    print('MH alpha unit test passed')
         
@@ -675,9 +674,9 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         logP_A2, logP_Z2 = self.evalProbs(Z_t, self.eta0, self.alpha)
         a1 = logP_A1 + logP_Z1 - (logP_A2 + logP_Z2)
         a2 = logQ[0] + np.log(weight[0])-(logQ[1]+np.log[weight[1]])
-        absdiff = np.abs(a1-a2)
-        if absdiff > self.abstol:
+        reldiff = (a1-a2)/abs(a2)
+        if reldiff > self.reltol:
             print('MH splitmerge Z unit test failed')
-            print('absdiff: ', absdiff)
+            print('reldiff: ', reldiff)
         #else:
         #    print('MH splitmerge Z unit test passed')
