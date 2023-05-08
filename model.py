@@ -70,7 +70,8 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         #self.matlab_compare = config.matlab_compare
         #self.unit_test = config.unit_test
         #self.reltol = 1e-9 # relative tolerance used for unit tests
-    
+        self.convergence_criteria = 1e-7 # convergence criteria (based on dlogP/abs(logP))
+        
         # Miscellaneous.
         self.main_dir = config.main_dir
         self.disp = config.disp
@@ -182,6 +183,8 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 #self.sample['eta'].append(self.eta) # maybe dont' save
                 #self.sample['alpha'].append(self.alpha) # maybe dont' save
                 #self.sample['eta0'].append(self.eta0) # maybe dont' save
+             
+            # Store MAP sample   
             if logP > logP_best:
                 self.sample['MAP'] = {'iter': self.it, 
                                       'Z': self.Z, 
@@ -193,12 +196,20 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                                       'alpha': self.alpha, 
                                       'eta0': self.eta0}
                 logP_best = logP
+            
+            # Convergence criteria
+            if len(self.sample['iter']) > 2: # check convergence criteria if two samples have been stored (note: convergence is checked based on samples stored in self.sample which is stored every self.sample_step iterations, maybe better to average difference over last 10 samplels or so)
+                dlogP = np.diff(self.sample['logP'][-2:])
+                abslogP = abs(self.sample['logP'][-2])
+                print(dlogP/abslogP)
+                if dlogP/abslogP < self.convergence_criteria: 
+                    print('Convergence criteria reached')
+                    break
          
         # Display final iteration
         print('Result of final iteration')
         print('%12s | %12s | %12s | %12s | %12s ' % ('iter', 'logP', 'dlogP/|logP|', 'noc', 'time'))
         print('%12.0f | %12.4e | %12.4e | %12.0f | %12.4f ' % (self.it, logP, dlogP/abs(logP), self.noc, elapsed_time))
-
 
 ############################################################### Gibbs sampler ###############################################################
 
@@ -487,7 +498,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 logP_Z_new = gammaln(self.noc * alpha_new) - gammaln(self.noc * alpha_new + self.N) - self.noc * gammaln(alpha_new) + np.sum(gammaln(self.sumZ + alpha_new))
 
             #if self.unit_test:
-            #    self.unit_test_MH_alpha(alpha_new=alpha_new, logP_Z_new=logP_Z_new, logP_Z=self.logP_Z) # inputs: eta0_new=None, logP_A_new=None, logP_A=None, alpha_new, logP_Z_new, logP_Z
+            #    self.unit_test_MH_alpha(alpha_new=alpha_new, logP_Z_new=logP_Z_new, logP_Z=self.logP_Z)
             
             #if self.matlab_compare:
             #    randalpha = randalpha_list[i]
@@ -583,7 +594,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         #    ZAZt[:,:,s] = self.Z @ self.A[:,:,s] @ self.Z.T
         #    ZAZt[:,:,s] = ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s] 
         ZAZt = np.stack([self.Z @ self.A[:,:,s] @ self.Z.T for s in range(self.S)], axis=2) # alternative
-        ZAZt = np.stack([ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s] for s in range(self.S)], axis=2) # alternativ
+        ZAZt = np.stack([ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s] for s in range(self.S)], axis=2) # alternative
           
         sum_ZAZt = np.sum(ZAZt, axis=2)
         self.eta = ZAZt/sum_ZAZt[:,:,np.newaxis]
