@@ -201,7 +201,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             if len(self.sample['iter']) > 2: # check convergence criteria if two samples have been stored (note: convergence is checked based on samples stored in self.sample which is stored every self.sample_step iterations, maybe better to average difference over last 10 samplels or so)
                 dlogP = np.diff(self.sample['logP'][-2:])
                 abslogP = abs(self.sample['logP'][-2])
-                print(dlogP/abslogP)
+                #print(dlogP/abslogP)
                 if dlogP/abslogP < self.convergence_criteria: 
                     print('Convergence criteria reached')
                     break
