@@ -28,6 +28,7 @@ def main(config):
         config.threshold_annealing = False
     if config.threshold_annealing:
         config.maxiter_gibbs = 400
+        config.use_convergence_criteria = False
         
     print(config)
         
@@ -99,17 +100,18 @@ if __name__ == '__main__':
     parser.add_argument('--splitmerge', type=bool, default=True, help='use splitmerge for nonparametric model (True/False)')
     
     # Training configuration.
-    parser.add_argument('--maxiter_gibbs', type=int, default=400, help='max number of gibbs iterations')
+    parser.add_argument('--maxiter_gibbs', type=int, default=1000, help='max number of gibbs iterations')
     parser.add_argument('--maxiter_eta0', type=int, default=10, help='max number of MH iterations for sampling eta0')
     parser.add_argument('--maxiter_alpha', type=int, default=100, help='max number of MH iterations for sampling alpha')
     parser.add_argument('--maxiter_splitmerge', type=int, default=10, help='max number of splitmerge iterations')
     parser.add_argument('--unit_test', type=bool, default=False, help='perform unit test (True/False)')
     parser.add_argument('--matlab_compare', type=bool, default=False, help='compare to matlab code (True/False). If True, random variables are initiated from the saved random variables in folder matlab_randvar')
+    parser.add_argument('--use_convergence_criteria', type=bool, default=True, help='use convergence criteria (True/False). If True, the algorithm stops when the convergence criteria is met')
     
     # Miscellaneous.
     parser.add_argument('--main_dir', type=str, default='/work3/s174162/speciale/', help='main directory')
     parser.add_argument('--disp', type=bool, default=True, help='display iteration results (True/False)')
-    parser.add_argument('--sample_step', type=int, default=10, help='number of iterations between each saved/logged sample')
+    parser.add_argument('--sample_step', type=int, default=1, help='number of iterations between each saved/logged sample')
 
     config = parser.parse_args()
     main(config)

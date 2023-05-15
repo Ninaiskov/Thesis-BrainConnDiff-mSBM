@@ -67,9 +67,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         self.maxiter_eta0 = config.maxiter_eta0 
         self.maxiter_alpha = config.maxiter_alpha
         self.maxiter_splitmerge = config.maxiter_splitmerge 
-        #self.matlab_compare = config.matlab_compare
+        self.matlab_compare = config.matlab_compare
         #self.unit_test = config.unit_test
         #self.reltol = 1e-9 # relative tolerance used for unit tests
+        self.use_convergence_criteria = config.use_convergence_criteria 
         self.convergence_criteria = 1e-7 # convergence criteria (based on dlogP/abs(logP))
         
         # Miscellaneous.
@@ -98,10 +99,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         self.A = np.stack([self.A[:,:,s]+self.A[:,:,s].T for s in range(self.S)], axis=2) # alternative
         
         # Initialize Z (random clustering assignment matrix)
-        #if self.matlab_compare:
-        #    ind = scipy.io.loadmat('matlab_randvar/ind.mat')['ind'].ravel() -1 # TESTING
-        #else:
-        ind = np.random.choice(self.noc, self.N)
+        if self.matlab_compare:
+            ind = scipy.io.loadmat('matlab_randvar/ind.mat')['ind'].ravel() -1 # TESTING
+        else:
+            ind = np.random.choice(self.noc, self.N)
         self.Z = csc_matrix((np.ones(self.N), (ind, np.arange(self.N))), shape=(self.noc, self.N)).toarray()
         self.Z = self.Z[self.Z.sum(axis=1) > 0,:]
         self.Z = self.Z[np.sum(self.Z,1) > 0] # remove empty clusters
@@ -110,6 +111,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
     def train(self):
         
         # Set algorithm variables
+        logP_list = [] # list for saving last 10 logP values (used for evaluate convergence)
         logP = -np.inf
         logP_best = -np.inf
 
@@ -138,11 +140,11 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                         #self.A[:,:,s] = self.A[:,:,s]+self.A[:,:,s].T # The adjacency matrix of an undirected graph is always symmetric (note setting diagonal to zero using triu)
         
             # Gibbs sampling of Z
-            #if self.matlab_compare:
-                #JJ_list = scipy.io.loadmat('matlab_randvar/JJ.mat')['JJ_list'].ravel() 
-                #JJ = JJ_list[(self.it-1)*self.N:(self.it-1)*self.N+self.N] -1 # note: -1 to adjust to python indices
-            #else:
-            JJ = np.random.permutation(self.N) # random permutation of the nodes
+            if self.matlab_compare:
+                JJ_list = scipy.io.loadmat('matlab_randvar/JJ.mat')['JJ_list'].ravel() 
+                JJ = JJ_list[(self.it-1)*self.N:(self.it-1)*self.N+self.N] -1 # note: -1 to adjust to python indices
+            else:
+                JJ = np.random.permutation(self.N) # random permutation of the nodes
             
             self.Z, self.logP_A, self.logP_Z, _, _ = self.gibbs_sample_Z(self.Z, JJ, comp=[], Force=[]) # input: Z, A, eta0, alpha, N. Output: Z, logP_A, logP_Z
             if self.splitmerge:
@@ -177,8 +179,8 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 self.sample['iter'].append(self.it) # maybe don't save
                 #self.sample['Z'].append(self.Z) # maybe dont' save
                 self.sample['noc'].append(self.noc)
-                self.sample['logP_A'].append(self.logP_A) # logP_A|Z (log likelihood)
-                self.sample['logP_Z'].append(self.logP_Z) # logP_Z (log prior)
+                #self.sample['logP_A'].append(self.logP_A) # logP_A|Z (log likelihood)
+                #self.sample['logP_Z'].append(self.logP_Z) # logP_Z (log prior)
                 self.sample['logP'].append(logP) # logP_Z|A (log likelihood + log prior)
                 #self.sample['eta'].append(self.eta) # maybe dont' save
                 #self.sample['alpha'].append(self.alpha) # maybe dont' save
@@ -198,14 +200,14 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 logP_best = logP
             
             # Convergence criteria
-            if len(self.sample['iter']) > 2: # check convergence criteria if two samples have been stored (note: convergence is checked based on samples stored in self.sample which is stored every self.sample_step iterations, maybe better to average difference over last 10 samplels or so)
-                dlogP = np.diff(self.sample['logP'][-2:])
-                abslogP = abs(self.sample['logP'][-2])
-                #print(dlogP/abslogP)
-                if dlogP/abslogP < self.convergence_criteria: 
-                    print('Convergence criteria reached')
-                    break
-         
+            if self.use_convergence_criteria:
+                logP_list.append(logP)
+                if len(logP_list) >= 10:
+                    logP_list = logP_list[-10:]
+                    if np.mean(np.diff(logP_list)/np.abs(logP_list[:-1])) < self.convergence_criteria:
+                        print('Convergence criteria reached')
+                        break
+            
         # Display final iteration
         print('Result of final iteration')
         print('%12s | %12s | %12s | %12s | %12s ' % ('iter', 'logP', 'dlogP/|logP|', 'noc', 'time'))
@@ -218,8 +220,8 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         if self.model_type == 'parametric':
             Force = []
             comp = []
-        #if self.matlab_compare:
-        #    randval_list = scipy.io.loadmat('matlab_randvar/rand_val.mat')['randval_list'].ravel()
+        if self.matlab_compare:
+            randval_list = scipy.io.loadmat('matlab_randvar/rand_val.mat')['randval_list'].ravel()
         
         const = self.multinomialln(self.eta0) # likelihood constant, log B(eta0)
         self.sumZ = np.sum(Z, axis=1) # number of nodes in each cluster
@@ -273,7 +275,8 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 sum_mult_eval_dnoi = np.sum(mult_eval, axis=0)
                 if self.model_type == 'nonparametric':
                     mult_eval_di = self.multinomialln(np.concatenate((n_link + ZAi, ZAi + self.eta0), axis=1)) # (note we use broadcasting here to add the contribution of node i to each cluster)
-                    logQ = np.append(np.sum(mult_eval_di[:, :self.noc], axis=0), np.sum(mult_eval_di[:, self.noc], axis=0) - self.noc * const).T - np.append(sum_mult_eval_dnoi, 0) # note that prior is not included here since its just constant
+                    #logQ = np.append(np.sum(mult_eval_di[:, :self.noc], axis=0), np.sum(mult_eval_di[:, self.noc], axis=0) - self.noc * const).T - np.append(sum_mult_eval_dnoi, 0) # note that prior is not included here since its just constant
+                    logQ = np.append(np.sum(mult_eval_di[:, :self.noc], axis=0), np.sum(mult_eval_di[:, self.noc], axis=0)).T - np.append(sum_mult_eval_dnoi, 0) # TESTING (-self.noc * constant is also just constant terms)
                 else:
                     mult_eval_di = self.multinomialln(n_link + ZAi)
                     #logQ = np.sum(mult_eval_di, axis=0) - sum_mult_eval_dnoi + gammaln(self.sumZ + 1 + self.alpha) - gammaln(self.sumZ + self.alpha)
@@ -284,17 +287,16 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 if self.model_type == 'nonparametric':
                     weight = np.append(self.sumZ, self.alpha) # alpha is the weight for the CRP prior
                 else:
-                    weight = self.sumZ + self.alpha
-                    #weight = gamma(self.sumZ + 1 + self.alpha)/gamma(self.sumZ + self.alpha)
+                    weight = self.sumZ + self.alpha # = gamma(self.sumZ + 1 + self.alpha)/gamma(self.sumZ + self.alpha)
                     
                 #if self.unit_test:
                 #    self.unit_test_gibbs(logQ, weight, i)
                 
                 QQ = weight * QQ # compute true (weighted) pdf (weighted by the conditional prior)
-                #if self.matlab_compare:
-                #    randval = randval_list[i]
-                #else:
-                randval = np.random.rand()
+                if self.matlab_compare:
+                    randval = randval_list[i]
+                else:
+                    randval = np.random.rand()
 
                 ind = np.argmax(randval < np.cumsum(QQ/np.sum(QQ)),axis=0) # generate random sample using cdf (inverse transform sampling)
                 if ind >= self.noc: # this part is only the case for CRP prior (if self.model_type == 'nonparametric')
@@ -356,8 +358,9 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             mult_eval[:, ind] = mult_eval_di
             mult_eval[ind, :] = mult_eval_di.T
             
-            # Remove empty clusters - necessary?
+            # Remove empty clusters
             if np.any(self.sumZ == 0): # if any empty clusters exists
+                print('Removing empty clusters') # TESTING
                 d = np.nonzero(self.sumZ == 0)[0] # find empty cluster
                 if len(comp) > 0:
                     ind_d = np.nonzero(d < comp)[0] # find index of empty cluster in comp
@@ -478,19 +481,19 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
 
     def sample_alpha(self):
         # sample hyperparameter: "concentration parameter" / "rate of generating new clusters" used in CRP dist., imposes improper uniform prior, Metropolis Hastings
-        #if self.matlab_compare:
-        #    randnalpha_list = scipy.io.loadmat('matlab_randvar/randnalpha.mat')['randnalpha_list'].ravel() # TESTING
-        #    randalpha_list = scipy.io.loadmat('matlab_randvar/randalpha.mat')['randalpha_list'].ravel() # TESTING
+        if self.matlab_compare:
+            randnalpha_list = scipy.io.loadmat('matlab_randvar/randnalpha.mat')['randnalpha_list'].ravel() # TESTING
+            randalpha_list = scipy.io.loadmat('matlab_randvar/randalpha.mat')['randalpha_list'].ravel() # TESTING
         
         if self.model_type == 'nonparametric':
             constZ = np.sum(gammaln(self.sumZ))
         
         accept = 0
         for i in range(self.maxiter_alpha):
-            #if self.matlab_compare:
-            #    randnalpha = randnalpha_list[i]
-            #else: 
-            randnalpha = np.random.randn()
+            if self.matlab_compare:
+                randnalpha = randnalpha_list[i]
+            else: 
+                randnalpha = np.random.randn()
             alpha_new = np.exp(np.log(self.alpha) + 0.1 * randnalpha)  # symmetric proposal distribution in log-domain (use change of variable in acceptance rate alpha_new/alpha)
             if self.model_type == 'nonparametric':
                 logP_Z_new = self.noc * np.log(alpha_new) + constZ - gammaln(self.N + alpha_new) + gammaln(alpha_new)
@@ -500,10 +503,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             #if self.unit_test:
             #    self.unit_test_MH_alpha(alpha_new=alpha_new, logP_Z_new=logP_Z_new, logP_Z=self.logP_Z)
             
-            #if self.matlab_compare:
-            #    randalpha = randalpha_list[i]
-            #else: 
-            randalpha = np.random.rand()
+            if self.matlab_compare:
+                randalpha = randalpha_list[i]
+            else: 
+                randalpha = np.random.rand()
             if randalpha < alpha_new / self.alpha * np.exp(logP_Z_new - self.logP_Z):  # if u_k < acceptance probability A
                 self.alpha = alpha_new
                 self.logP_Z = logP_Z_new
@@ -513,9 +516,9 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
 
 
     def sample_eta0(self):
-        #if self.matlab_compare:
-        #    randneta0_list = scipy.io.loadmat('matlab_randvar/randneta0.mat')['randneta0_list'].ravel() # TESTING
-        #    randeta0_list = scipy.io.loadmat('matlab_randvar/randeta0.mat')['randeta0_list'].ravel() # TESTING
+        if self.matlab_compare:
+            randneta0_list = scipy.io.loadmat('matlab_randvar/randneta0.mat')['randneta0_list'].ravel() # TESTING
+            randeta0_list = scipy.io.loadmat('matlab_randvar/randeta0.mat')['randeta0_list'].ravel() # TESTING
         
         #n_link_noeta0 = np.zeros((self.noc, self.noc, self.S))
         #for s in range(self.S):
@@ -531,10 +534,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         accept = 0
         for s in range(self.S):
             for i in range(self.maxiter_eta0):
-                #if self.matlab_compare:
-                #    randneta0 = randneta0_list[i] # TESTING
-                #else:
-                randneta0 = np.random.randn() 
+                if self.matlab_compare:
+                    randneta0 = randneta0_list[i] # TESTING
+                else:
+                    randneta0 = np.random.randn() 
                 eta_new = np.exp(np.log(self.eta0[s]) + 0.1 * randneta0)  # symmetric proposal distribution in log-domain (use change of variable in acceptance rate alpha_new/alpha)
                 eta0_new = self.eta0.copy()
                 eta0_new[s] = eta_new
@@ -546,10 +549,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 #if self.unit_test:
                 #    self.unit_test_MH_eta0(eta0_new = eta0_new, logP_A_new = logP_A_new, logP_A = self.logP_A)
                 
-                #if self.matlab_compare:
-                #    randeta0 = randeta0_list[i]
-                #else:
-                randeta0 = np.random.rand()
+                if self.matlab_compare:
+                    randeta0 = randeta0_list[i]
+                else:
+                    randeta0 = np.random.rand()
                 if randeta0 < (eta_new/self.eta0[s]) * np.exp(logP_A_new - self.logP_A):
                     self.eta0[s] = eta_new
                     self.logP_A = logP_A_new
@@ -562,11 +565,11 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
 ############################################################### Data processing functions ###############################################################
     def load_data(self):
             if self.dataset == 'synthetic':
-                #if self.matlab_compare:
-                #    A_dict = scipy.io.loadmat('matlab_randvar/A.mat')
-                #    self.A = A_dict['A']
-                #else:
-                self.A = generate_syndata(self.Nc, self.K, self.S1, self.S2)
+                if self.matlab_compare:
+                    A_dict = scipy.io.loadmat('matlab_randvar/A.mat')
+                    self.A = A_dict['A']
+                else:
+                    self.A = generate_syndata(self.Nc, self.K, self.S1, self.S2)
             elif self.dataset == 'hcp' or self.dataset == 'decnef':
                 folder_name = self.atlas_name+str(self.n_rois)
                 folder_path = os.path.join(self.main_dir, 'data/'+self.dataset+'/'+folder_name)
