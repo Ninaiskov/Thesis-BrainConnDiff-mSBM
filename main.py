@@ -11,7 +11,8 @@ import pstats
 def main(config):
     # initiate results folder and log.txt file
     if config.dataset == 'synthetic':
-        exp_name = config.model_type+'_Nc'+str(config.Nc)+'_K'+str(config.K)+'_S1'+str(config.S1)+'_S2'+str(config.S2)+'_'+str(datetime.now())#str(uuid.uuid4())
+        exp_name = config.model_type+'_'+str(config.K)+'_'+str(config.S1)+'_'+str(config.S2)+'_'+str(config.balance_Nc)+'_'+config.eta_similarity+str(datetime.now())
+        #exp_name = config.model_type+'_Nc'+str(config.Nc)+'_K'+str(config.K)+'_S1'+str(config.S1)+'_S2'+str(config.S2)+'_'+str(datetime.now())#str(uuid.uuid4())
     else:
         exp_name = config.model_type+'_'+config.atlas_name+str(config.n_rois)+'_'+str(datetime.now())#str(uuid.uuid4())
     save_dir = os.path.join(config.main_dir, 'results/'+config.dataset+'/'+exp_name)
@@ -38,10 +39,12 @@ def main(config):
             f.write(f"dataset: {config.dataset}\n")
             f.write(f"exp_name: {exp_name}\n")
             f.write(f"matlab_compare: {config.matlab_compare}\n")
-            f.write(f"Nc: {config.Nc}\n")
+            f.write(f"N: {config.N}\n")
             f.write(f"K: {config.K}\n")
             f.write(f"S1: {config.S1}\n")
             f.write(f"S2: {config.S2}\n")
+            f.write(f"balance_Nc: {config.balance_Nc}\n")
+            f.write(f"eta_similarity: {config.eta_similarity}\n")
             f.write(f"model_type: {config.model_type}\n")
             f.write(f"splitmerge: {config.splitmerge}\n")
             f.write(f"noc: {config.noc}\n")
@@ -85,10 +88,13 @@ if __name__ == '__main__':
     # Data configuration.
     parser.add_argument('--dataset', type=str, default='synthetic', help='dataset name (synthetic, hcp, decnef)')
         # Synthetic data configuration. 
-    parser.add_argument('--Nc', type=int, default=50, help='number of nodes in each cluster (synthetic data)')
+    parser.add_argument('--N', type=int, default=100, help='number of nodes in each cluster (synthetic data)')
     parser.add_argument('--K', type=int, default=5, help='number of clusters (synthetic data)')
     parser.add_argument('--S1', type=int, default=5, help='number of graphs of type 1 (synthetic data)')
     parser.add_argument('--S2', type=int, default=5, help='number of graphs of type 2 (synthetic data)')
+    parser.add_argument('--balance_Nc', type=bool, default=True, help='if size of clusters (no. of nodes in each cluster) should be balanced or not (True/False)')
+    parser.add_argument('--eta_similarity', type=str, default='comp_diff', help='same, comp_diff or part_diff (how similar eta1 and eta2 should be)')
+
         # MRI data configurations (fMRI and/or dMRI)
     parser.add_argument('--atlas_name', type=str, default='schaefer', help='atlas name (schaefer)')
     parser.add_argument('--n_rois', type=int, default=100, help='number of ROIs (hcp/decnef data): 100, 200 or 300')

@@ -3,11 +3,123 @@
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 
 os.environ["OMP_NUM_THREADS"] = "4"  # set number of threads to 4
 
 ############################################################ Synthetic data ############################################################
-def generate_syndata(Nc, K, S1, S2, disp_data = False):
+def generate_syndata(N, K, S1, S2, balance_Nc, eta_similarity, seed=0, disp_data = False):
+    ## Inputs
+    # N = total number of nodes (corresponds to n_rois)
+    # K = Number of clusters;
+    # S1 = Number of first type of graph, e.g. healthy
+    # S2 = Number of second type of graph, e.g. sick
+    # balance_Nc = Boolean (True/False) if size of clusters (no. of nodes in each cluster) should be balanced or not
+    # eta_similarity = 'same', 'comp_diff' or 'part_diff' (how similar eta1 and eta2 should be)
+    # disp_data = bool for displaying generated data
+    
+    # Output
+    # A = adjacency matrices for all subjects
+    
+    # STEPS:
+    # 1) compute partition (z)
+        # balanced or unbalanced
+    if balance_Nc:
+        Nc = int(N/K)
+        z = np.kron(np.eye(K),np.ones((Nc,1)))
+    else: 
+        if K == 2:
+            Nc_list = [70, 30]
+        elif K == 5:
+            Nc_list = [60, 20, 10, 5, 5]
+        elif K == 10:
+            Nc_list = [20, 20, 10, 10, 10, 10, 5, 5, 5, 5]
+        else:
+            print('Nc_list not specfied for chosen K')
+
+        z = np.zeros((N, K))
+        for k in range(K): # len(Nc_list) = K
+            Nc = Nc_list[k]
+            cumsumNc = int(np.sum(Nc_list[:k]))
+            z[cumsumNc:cumsumNc+Nc, k] = 1
+    
+    # 2) compute block/cluster interactions (eta)
+        # same, completely or partially different
+    eta1 = np.random.rand(K, K)
+    if eta_similarity == 'same':
+        eta2 = eta1.copy()
+    elif eta_similarity == 'comp_diff':
+        eta2 = np.random.rand(K, K)
+    elif eta_similarity == 'part_diff':
+        #print('Using partially different etas')
+        eta2 = eta1.copy()
+        if K == 2:
+            eta2[0,0] = np.random.rand()
+        elif K == 5:
+            eta2[:3,:3] = np.random.rand(3,3)
+        elif K == 10:
+            eta2[:5,:5] = np.random.rand(5,5)
+        else:
+            print('eta2 not specfied for chosen K')
+    else:
+        print('eta_similarity not specified') 
+    
+    # 3) compute adjacency matrices (A)
+    np.random.seed(seed)
+    A = np.empty((N, N, S1+S2))
+    A.fill(np.nan)
+    for s in range(S1+S2):
+        if s <= S1-1:
+            At = z @ eta1 @ z.T > np.random.rand(N, N)
+            A[:,:,s] = np.triu(At, 1) + np. triu(At, 1).T
+        else:
+            At = z @ eta2 @ z.T > np.random.rand(N, N)
+            A[:,:,s] = np.triu(At, 1) + np. triu(At, 1).T
+
+    if disp_data:
+        fig, ax = plt.subplots()
+        cmap_binary = ListedColormap(['k', 'w']) 
+        im = ax.imshow(z, interpolation='nearest', aspect='auto', cmap=cmap_binary, extent=(0, z.shape[1], 0, z.shape[0]))
+        ax.set_title('Partition $z$', weight='bold', fontsize=15)
+        ax.set_ylabel('Node', fontsize=12)
+        ax.set_xlabel('Cluster', fontsize=12)
+        cbar = fig.colorbar(im, ax=ax, shrink=0.7, ticks=[0,1])
+        plt.show()
+
+        fig, ax = plt.subplots(1,2)
+        plt.subplots_adjust(wspace=0.3, top=1.22)
+        im = ax[0].imshow(eta1)
+        ax[0].set_title('$\eta_1$')
+        ax[0].set_ylabel('Cluster', fontsize=12)
+        ax[0].set_xlabel('Cluster', fontsize=12)
+        im = ax[1].imshow(eta2)
+        ax[1].set_ylabel('Cluster', fontsize=12)
+        ax[1].set_xlabel('Cluster', fontsize=12)
+        ax[1].set_title('$\eta_2$')
+        cbar = fig.colorbar(im, ax=ax.ravel().tolist(), shrink=0.3)
+        fig.suptitle('Cluster interaction matrices',fontsize=15, weight='bold')
+        plt.show()
+
+        default_blue = '#1f77b4'
+        cmap_binary = ListedColormap(['white', default_blue]) 
+        fig, ax = plt.subplots(1,2)
+        plt.subplots_adjust(wspace=0.3, top=1.1)
+        im = ax[0].spy(A[:,:,0],cmap=cmap_binary)
+        ax[0].set_ylabel('Node', fontsize=12)
+        ax[0].set_xlabel('Node', fontsize=12)
+        ax[0].set_title('Graph type 1', weight='bold')
+        im = ax[1].spy(A[:,:,-1],cmap=cmap_binary)
+        ax[1].set_ylabel('Node', fontsize=12)
+        ax[1].set_xlabel('Node', fontsize=12)
+        ax[1].set_title('Graph type 2', weight='bold')
+        cbar = fig.colorbar(im, ax=ax.ravel().tolist(), shrink=0.3)
+        fig.suptitle('Adjacency matrix $A$',fontsize=15, weight='bold')
+        plt.show()
+        
+    return A, z, eta1, eta2   
+    
+
+def old_generate_syndata(Nc, K, S1, S2, disp_data = False):
     ## Inputs
     # Nc = size of clusters (no. of nodes in each cluster)
     # K = Number of clusters;
@@ -38,8 +150,9 @@ def generate_syndata(Nc, K, S1, S2, disp_data = False):
     # try 3 cases: 1) same etas, 2)completely different etas, and 3) partially different etas
     eta1 = np.random.rand(K-1, K-1) # test with np.ones((K-1,K-1))
     eta2 = eta1.copy()
-    # eta2 = np.random.rand(K-1, K-1)
+    #eta2 = np.random.rand(K-1, K-1)
 
+    #eta2[:5,:5] = np.random.rand(5, 5)
     eta2[:2,:] = np.random.rand(2, K-1) # or actually dim = (K-1)/2 , K-1
     eta2[:,:2] = np.random.rand(K-1, 2)
     

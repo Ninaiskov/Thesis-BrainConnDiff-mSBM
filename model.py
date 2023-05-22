@@ -47,10 +47,13 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         # Data configuration.
         self.dataset = config.dataset
             # Synthetic data configuration.
-        self.Nc = config.Nc
+        self.N = config.N
         self.K = config.K
         self.S1 = config.S1
         self.S2 = config.S2
+        self.balance_Nc = config.balance_Nc
+        self.eta_similarity = config.eta_similarity
+        
             # MRI data configurations (fMRI and/or dMRI)
         self.atlas_name = config.atlas_name
         self.n_rois = config.n_rois
@@ -275,8 +278,8 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 sum_mult_eval_dnoi = np.sum(mult_eval, axis=0)
                 if self.model_type == 'nonparametric':
                     mult_eval_di = self.multinomialln(np.concatenate((n_link + ZAi, ZAi + self.eta0), axis=1)) # (note we use broadcasting here to add the contribution of node i to each cluster)
-                    #logQ = np.append(np.sum(mult_eval_di[:, :self.noc], axis=0), np.sum(mult_eval_di[:, self.noc], axis=0) - self.noc * const).T - np.append(sum_mult_eval_dnoi, 0) # note that prior is not included here since its just constant
-                    logQ = np.append(np.sum(mult_eval_di[:, :self.noc], axis=0), np.sum(mult_eval_di[:, self.noc], axis=0)).T - np.append(sum_mult_eval_dnoi, 0) # TESTING (-self.noc * constant is also just constant terms)
+                    logQ = np.append(np.sum(mult_eval_di[:, :self.noc], axis=0), np.sum(mult_eval_di[:, self.noc], axis=0) - self.noc * const).T - np.append(sum_mult_eval_dnoi, 0) # note that prior is not included here since its just constant
+                    #logQ = np.append(np.sum(mult_eval_di[:, :self.noc], axis=0), np.sum(mult_eval_di[:, self.noc], axis=0)).T - np.append(sum_mult_eval_dnoi, 0) # TESTING (-self.noc * constant is also just constant terms)
                 else:
                     mult_eval_di = self.multinomialln(n_link + ZAi)
                     #logQ = np.sum(mult_eval_di, axis=0) - sum_mult_eval_dnoi + gammaln(self.sumZ + 1 + self.alpha) - gammaln(self.sumZ + self.alpha)
@@ -288,6 +291,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                     weight = np.append(self.sumZ, self.alpha) # alpha is the weight for the CRP prior
                 else:
                     weight = self.sumZ + self.alpha # = gamma(self.sumZ + 1 + self.alpha)/gamma(self.sumZ + self.alpha)
+                    #weight = self.sumZ + self.alpha/self.noc
                     
                 #if self.unit_test:
                 #    self.unit_test_gibbs(logQ, weight, i)
@@ -380,8 +384,9 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             constZ = np.sum(gammaln(self.sumZ))
             logP_Z = self.noc * np.log(self.alpha) + constZ - gammaln(self.N + self.alpha) + gammaln(self.alpha)
         else:
-            logP_Z = gammaln(self.noc * self.alpha) - gammaln(self.noc * self.alpha + self.N) - self.noc * gammaln(self.alpha) + np.sum(gammaln(self.sumZ + self.alpha))
-        
+            #logP_Z = gammaln(self.noc * self.alpha) - gammaln(self.noc * self.alpha + self.N) - self.noc * gammaln(self.alpha) + np.sum(gammaln(self.sumZ + self.alpha))
+            logP_Z = gammaln(self.alpha) - gammaln(self.alpha + self.N) - self.noc * gammaln(self.alpha/self.noc) + np.sum(gammaln(self.sumZ + self.alpha/self.noc))
+
         return Z, logP_A, logP_Z, logQ_trans, comp
     
 
@@ -421,7 +426,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             if n_setZ > 0:
                 for _ in range(3): # "3 restricted gibbs sampling sweeps"
                     Z_t, logP_A_t, logP_Z_t, logQ_trans, comp = self.gibbs_sample_Z(Z_t, JJ, comp, Force=[]) # input: Z, A, eta0, alpha, N. Output: Z, logP_A, logP_Z
-            else:
+            else: # no other possible splits
                 logQ_trans = 0
                 logP_A_t, logP_Z_t = self.evalProbs(Z_t, self.eta0, self.alpha)
                 
@@ -493,7 +498,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             if self.matlab_compare:
                 randnalpha = randnalpha_list[i]
             else: 
-                randnalpha = np.random.randn()
+                randnalpha = np.random.randn() # Normally distributed random variable
             alpha_new = np.exp(np.log(self.alpha) + 0.1 * randnalpha)  # symmetric proposal distribution in log-domain (use change of variable in acceptance rate alpha_new/alpha)
             if self.model_type == 'nonparametric':
                 logP_Z_new = self.noc * np.log(alpha_new) + constZ - gammaln(self.N + alpha_new) + gammaln(alpha_new)
@@ -537,7 +542,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 if self.matlab_compare:
                     randneta0 = randneta0_list[i] # TESTING
                 else:
-                    randneta0 = np.random.randn() 
+                    randneta0 = np.random.randn() # Normally distributed random variable
                 eta_new = np.exp(np.log(self.eta0[s]) + 0.1 * randneta0)  # symmetric proposal distribution in log-domain (use change of variable in acceptance rate alpha_new/alpha)
                 eta0_new = self.eta0.copy()
                 eta0_new[s] = eta_new
@@ -564,23 +569,27 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
 
 ############################################################### Data processing functions ###############################################################
     def load_data(self):
+            data_path = os.path.join(self.main_dir, 'data/'+self.dataset)
             if self.dataset == 'synthetic':
                 if self.matlab_compare:
                     A_dict = scipy.io.loadmat('matlab_randvar/A.mat')
                     self.A = A_dict['A']
                 else:
-                    self.A = generate_syndata(self.Nc, self.K, self.S1, self.S2)
+                    #self.A = generate_syndata(self.Nc, self.K, self.S1, self.S2)
+                    filename = 'A_'+str(self.N)+'_'+str(self.K)+'_'+str(self.S1)+'_'+str(self.S2)+'_'+str(self.balance_Nc)+'_'+str(self.eta_similarity)+'.npy'
+                    self.A = np.load(os.path.join(data_path, filename))
             elif self.dataset == 'hcp' or self.dataset == 'decnef':
                 folder_name = self.atlas_name+str(self.n_rois)
-                folder_path = os.path.join(self.main_dir, 'data/'+self.dataset+'/'+folder_name)
+                folder_path = os.path.join(data_path, folder_name)
                 if self.threshold_annealing: # incresing graph density over iterations
                     self.graph_count += 1
                     print('Annealing threshold: graph no. '+str(self.graph_count))
                     filename = 'A'+str(self.graph_count)+'_vals_list.npy'
-                    A_vals_list = np.load(os.path.join(folder_path,filename))
+                    A_vals_list = np.load(os.path.join(folder_path, filename))
                 else: # using fixed graph density (most dense graph)
                     print('No threshold annnealing: Using fixed graph density (most dense graph)')
-                    A_vals_list = np.load(os.path.join(folder_path,'A'+str(self.n_graphs)+'_vals_list.npy'))
+                    filename = 'A'+str(self.n_graphs)+'_vals_list.npy' # use most dense graph (A4_vals_list.npy)
+                    A_vals_list = np.load(os.path.join(folder_path, filename))
                 self.A = compute_A(A_vals_list, self.n_rois)
             else:
                 print('Unknown dataset')
