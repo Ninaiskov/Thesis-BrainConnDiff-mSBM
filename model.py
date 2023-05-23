@@ -11,7 +11,7 @@ from scipy.sparse import csc_matrix #csr_matrix
 from scipy.special import gammaln, gamma
 import time
 import scipy.io
-from data_processors import generate_syndata, compute_A
+from data_processors import compute_A#, generate_syndata
 
 os.environ["OMP_NUM_THREADS"] = "2"  # set number of threads
 
