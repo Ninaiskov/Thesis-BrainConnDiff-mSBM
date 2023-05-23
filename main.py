@@ -92,7 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('--K', type=int, default=5, help='number of clusters (synthetic data)')
     parser.add_argument('--S1', type=int, default=5, help='number of graphs of type 1 (synthetic data)')
     parser.add_argument('--S2', type=int, default=5, help='number of graphs of type 2 (synthetic data)')
-    parser.add_argument('--balance_Nc', type=bool, default=None, help='if size of clusters (no. of nodes in each cluster) should be balanced or not (True/False)')
+    parser.add_argument('--balance_Nc', type=bool, default=False, help='if size of clusters (no. of nodes in each cluster) should be balanced or not (True/False)')
     parser.add_argument('--eta_similarity', type=str, default='comp_diff', help='same, comp_diff or part_diff (how similar eta1 and eta2 should be)')
 
         # MRI data configurations (fMRI and/or dMRI)
