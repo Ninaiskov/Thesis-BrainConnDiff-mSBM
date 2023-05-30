@@ -19,7 +19,6 @@ import nilearn.connectome
 import nibabel as nib
 import networkx as nx
 from matplotlib.colors import ListedColormap
-from data_processors import compute_A
 from ast import literal_eval
 from collections import Counter
 
@@ -345,7 +344,7 @@ def get_stats(exp_paths, par):
     
     return MAPpar_list, par_list, mean_par, min_par, max_par
 
-def plot_par(dataset, df, par, miniter_gibbs=None, maxiter_gibbs=None, main_dir=main_dir, label_fontsize=label_fontsize, subtitle_fontsize=subtitle_fontsize, title_fontsize=title_fontsize):
+def plot_par(dataset, df, par, miniter_gibbs=None, maxiter_gibbs=None, main_dir=main_dir, label_fontsize=label_fontsize, subtitle_fontsize=subtitle_fontsize, title_fontsize=title_fontsize, fig_name=None):
     
     # Input:  
     # dataset: 'hcp' or 'decnef'
@@ -427,22 +426,22 @@ def plot_par(dataset, df, par, miniter_gibbs=None, maxiter_gibbs=None, main_dir=
             else:
                 print('unknown dataset')   
             plt.fill_between(iters[miniter_gibbs:maxiter_gibbs], min_par[miniter_gibbs:maxiter_gibbs], max_par[miniter_gibbs:maxiter_gibbs], alpha=0.5, color=color)
-        
-    plt.title(par + ' - ' + dataset)
-    plt.ylabel(par)
-    plt.xlabel('Gibbs iterations')
+    
+    plt.title(par + ' - ' + dataset, fontsize=title_fontsize, weight='bold')
+    plt.ylabel(par, fontsize=label_fontsize)
+    plt.xlabel('Gibbs iterations', fontsize=label_fontsize)
     plt.legend(loc='upper right',fontsize='small', fancybox=True, shadow=True, bbox_to_anchor=(1.4, 0.85))
-    plt.show()
+    if fig_name is not None:
+        plt.savefig(main_dir+'/figures/'+dataset+'_'+fig_name+'.png', bbox_inches='tight') 
+    else:
+        plt.savefig(main_dir+'/figures/'+dataset+'_plot_'+par+'.png', bbox_inches='tight')    
 
-
-def boxplot_par(dataset, df, par, miniter_gibbs=None, maxiter_gibbs=None, main_dir=main_dir, label_fontsize=label_fontsize, subtitle_fontsize=subtitle_fontsize, title_fontsize=title_fontsize):
+def boxplot_par(dataset, df, par, main_dir=main_dir, label_fontsize=label_fontsize, subtitle_fontsize=subtitle_fontsize, title_fontsize=title_fontsize, fig_name=None):
     
     # Input:  
     # dataset: 'hcp' or 'decnef'
     # df: dataframe with experiment overview
     # par: parameter to plot as a function of Gibbs iterations, e.g. 'logP' or 'noc'
-    # miniter_gibbs: minimum Gibbs iteration to plot
-    # maxiter_gibbs: maximum Gibbs iteration to plot
     
     # Output: plot of parameter as a function of Gibbs iterations
 
@@ -485,10 +484,10 @@ def boxplot_par(dataset, df, par, miniter_gibbs=None, maxiter_gibbs=None, main_d
         noc_color_index = list(noc_values).index(noc) % num_noc
         
         if dataset == 'hcp' or dataset == 'decnef':
-            color_intensity = n_rois / 300#df_dataset['n_rois'].max()  # Higher n_rois, darker intensity
+            color_intensity = n_rois / df_dataset['n_rois'].max()  # Higher n_rois, darker intensity
             label = f"{model_type}_nrois{n_rois}_noc{noc}"
         elif dataset == 'synthetic':
-            color_intensity = K / 10#df_dataset['K'].max()  # Higher K, darker intensity
+            color_intensity = K / df_dataset['K'].max()  # Higher K, darker intensity
             label = f"{model_type}_K{K}_S1{S1}_Nc_type{Nc_type}_eta_similarity{eta_similarity}_noc{noc}"
         else:
             print('unknown dataset')
@@ -508,47 +507,15 @@ def boxplot_par(dataset, df, par, miniter_gibbs=None, maxiter_gibbs=None, main_d
     ax.set_xticklabels(label_list, rotation=90)
     for box, color in zip(bp['boxes'], color_list):
         box.set_facecolor(color)
-    ax.set_ylabel(par + ' distribution')
-    ax.set_title('Boxplots of ' + par + ' - ' + dataset)
+    ax.set_ylabel(par + ' distribution', fontsize=label_fontsize)
+    ax.set_title('Boxplots of ' + par + ' - ' + dataset, fontsize=title_fontsize, weight='bold')
     ax.yaxis.grid(True)
-    plt.show()
-
-def old_plot_par(dataset, df, par, miniter_gibbs=None, maxiter_gibbs=None, main_dir=main_dir):
-    
-    # Input: 
-    # exp_folder_lists: list of experiment folder names
-    # par: parameter to plot as a function of Gibbs iterations, e.g. 'logP' or 'noc'
-
-    # sort by dataset
-    if dataset == 'hcp' or dataset == 'decnef':
-        df_dataset = df.loc[df.dataset==dataset].sort_values(by=['n_rois','threshold_annealing','model_type','splitmerge','noc'], ascending=True).reset_index()
-    elif dataset == 'synthetic':
-        df_dataset = df.loc[df.dataset==dataset].sort_values(by=['N','K','S1','S2','Nc_type', 'eta_similarity', 'model_type','splitmerge','noc'], ascending=True).reset_index()
+    if fig_name is not None:
+        plt.savefig(main_dir+'/figures/'+dataset+'_'+fig_name+'.png', bbox_inches='tight')    
     else:
-        print('unknown dataset')
-    
-    # Output: plot of parameter as a function of Gibbs iterations
-    plt.figure(figsize=(8,6))
-    for i in range(len(df_dataset.exp_name_list)):
-        folders = df_dataset.exp_name_list[i]
-        paths = [os.path.join(main_dir,'results/'+dataset+'/'+folder) for folder in folders]
-        _, mean_par, min_par, max_par = get_stats(paths, par)
-        iters = range(len(mean_par))
-        if miniter_gibbs is None:
-            miniter_gibbs = iters[0]
-        if maxiter_gibbs is None:
-            maxiter_gibbs = iters[-1]
-        label = df_dataset.model_type[i]+'_nrois'+df_dataset.n_rois[i]+'_noc'+str(df_dataset.noc[i])
-        plt.plot(iters[miniter_gibbs:maxiter_gibbs], mean_par[miniter_gibbs:maxiter_gibbs],'-o', label=label)
-        plt.fill_between(iters[miniter_gibbs:maxiter_gibbs], min_par[miniter_gibbs:maxiter_gibbs], max_par[miniter_gibbs:maxiter_gibbs], alpha=0.5)
+        plt.savefig(main_dir+'/figures/'+dataset+'_boxplot_'+par+'.png', bbox_inches='tight')    
 
-    plt.title(par + ' - ' + dataset)
-    plt.ylabel(par)
-    plt.xlabel('Gibbs iterations')
-    plt.legend(loc='upper right',fontsize='small', fancybox=True, shadow=True, bbox_to_anchor=(1.4, 0.85))
-    plt.show()
-
-def oldold_plot_par(dataset, exp1_folders, exp2_folders, par, plot1=True, plot2=True, miniter_gibbs=None, maxiter_gibbs=None, main_dir=main_dir):
+def old_plot_par(dataset, exp1_folders, exp2_folders, par, plot1=True, plot2=True, miniter_gibbs=None, maxiter_gibbs=None, main_dir=main_dir, fig_name=None):
     
     # Input: 
     # exp_folder_lists: list of experiment folder names (1 is without annenaling, 2 is with annealing)
@@ -563,7 +530,7 @@ def oldold_plot_par(dataset, exp1_folders, exp2_folders, par, plot1=True, plot2=
     #for i in range(len(exp_folder_list)):
     #exp_folder = exp_folder_list[i]
     if plot1:
-        _, mean_par, min_par, max_par = get_stats(exp_folder_list1, par)
+        _, _, mean_par, min_par, max_par = get_stats(exp1_paths, par)
         iters = range(len(mean_par))
         if miniter_gibbs is None:
             miniter_gibbs = iters[0]
@@ -574,7 +541,7 @@ def oldold_plot_par(dataset, exp1_folders, exp2_folders, par, plot1=True, plot2=
         plt.fill_between(iters[miniter_gibbs:maxiter_gibbs], min_par[miniter_gibbs:maxiter_gibbs], max_par[miniter_gibbs:maxiter_gibbs], alpha=0.5, color='blue')
 
     if plot2:
-        _, mean_par, min_par, max_par = get_stats(exp_folder_list2, par)
+        _, _, mean_par, min_par, max_par = get_stats(exp2_paths, par)
         iters = range(len(mean_par))
         #miniter_gibbs = iters[0]
         #maxiter_gibbs = iters[-1]
@@ -582,11 +549,14 @@ def oldold_plot_par(dataset, exp1_folders, exp2_folders, par, plot1=True, plot2=
         plt.plot(iters[miniter_gibbs:maxiter_gibbs], mean_par[miniter_gibbs:maxiter_gibbs],'-ro', label='exp2')
         plt.fill_between(iters[miniter_gibbs:maxiter_gibbs], min_par[miniter_gibbs:maxiter_gibbs], max_par[miniter_gibbs:maxiter_gibbs], alpha=0.5, color='red')
 
-    plt.title(par + ' - ' + dataset)
-    plt.ylabel(par)
-    plt.xlabel('Gibbs iterations')
+    plt.title(par + ' - ' + dataset, fontsize=title_fontsize, weight='bold')
+    plt.ylabel(par, fontsize=label_fontsize)
+    plt.xlabel('Gibbs iterations', fontsize=label_fontsize)
     plt.legend()
-    plt.show()
+    if fig_name is not None:
+        plt.savefig(main_dir+'/figures/'+dataset+'_'+fig_name+'.png', bbox_inches='tight')    
+    else:
+        plt.savefig(main_dir+'/figures/'+dataset+'_old_plot_'+par+'.png', bbox_inches='tight')    
     
     
 def plot_eta(dataset, eta, exp_name, main_dir=main_dir, label_fontsize=label_fontsize, subtitle_fontsize=subtitle_fontsize, title_fontsize=title_fontsize):
@@ -656,7 +626,7 @@ def plot_circ_stdeta(dataset, eta, noc, threshold=0, main_dir=main_dir, label_fo
 
     # draw the graph in a circular layout
     pos = nx.circular_layout(G)
-    node_color = sns.color_palette('hls', noc)
+    node_colors = sns.color_palette('hls', noc)
 
     # add only edges above the threshold
     G_thresh = nx.Graph()
@@ -665,7 +635,7 @@ def plot_circ_stdeta(dataset, eta, noc, threshold=0, main_dir=main_dir, label_fo
     for i, j in zip(*np.where(np.triu(eta_example) > threshold)):
         G_thresh.add_edge(i, j, weight=eta_example[i, j])
 
-    nx.draw_circular(G_thresh, with_labels=True, node_color=node_color, node_size=300,
+    nx.draw_circular(G_thresh, with_labels=True, node_color=node_colors, node_size=300,
                     edge_color=edge_colors, edge_cmap=edge_cmap, width=2,
                     font_size=label_fontsize)
 
@@ -675,8 +645,7 @@ def plot_circ_stdeta(dataset, eta, noc, threshold=0, main_dir=main_dir, label_fo
     plt.colorbar(sm)
 
     # show the plot
-    plt.title('Std eta circular graph')
-    plt.show()
+    plt.title('Circular graph - std $\eta$ (across subjects) - ' + dataset, fontsize=title_fontsize, weight='bold')
     plt.savefig(main_dir+'/figures/'+dataset+'_stdeta_circ.png', bbox_inches='tight')
      
         
@@ -766,7 +735,7 @@ def plot_sortedA(Z, dataset, n_rois, atlas_name='schaefer', main_dir=main_dir, l
     
     
 ############################################################ Classification functions ############################################################
-def get_x_data(eta):
+def get_X_data(eta):
     eta_triu_list = []
     for s in range(eta.shape[-1]):
         eta_triu_mat = np.triu(eta[:,:,s])
