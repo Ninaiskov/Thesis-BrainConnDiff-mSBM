@@ -11,7 +11,7 @@ from scipy.sparse import csc_matrix #csr_matrix
 from scipy.special import gammaln, gamma
 import time
 import scipy.io
-from data_processors import compute_A#, generate_syndata
+from helper_functions import compute_A#, generate_syndata
 
 os.environ["OMP_NUM_THREADS"] = "2"  # set number of threads
 
@@ -51,7 +51,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         self.K = config.K
         self.S1 = config.S1
         self.S2 = config.S2
-        self.balance_Nc = config.balance_Nc
+        self.Nc_type = config.Nc_type
         self.eta_similarity = config.eta_similarity
         
             # MRI data configurations (fMRI and/or dMRI)
@@ -576,7 +576,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                     self.A = A_dict['A']
                 else:
                     #self.A = generate_syndata(self.Nc, self.K, self.S1, self.S2)
-                    filename = 'A_'+str(self.N)+'_'+str(self.K)+'_'+str(self.S1)+'_'+str(self.S2)+'_'+str(self.balance_Nc)+'_'+str(self.eta_similarity)+'.npy'
+                    filename = 'A_'+str(self.N)+'_'+str(self.K)+'_'+str(self.S1)+'_'+str(self.S2)+'_'+str(self.Nc_type)+'_'+str(self.eta_similarity)+'.npy'
                     self.A = np.load(os.path.join(data_path, filename))
             elif self.dataset == 'hcp' or self.dataset == 'decnef':
                 folder_name = self.atlas_name+str(self.n_rois)
