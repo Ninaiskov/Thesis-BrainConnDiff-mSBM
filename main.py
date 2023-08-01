@@ -11,7 +11,8 @@ import pstats
 def main(config):
     # initiate results folder and log.txt file
     if config.dataset == 'synthetic':
-        exp_name = config.model_type+'_'+str(config.K)+'_'+str(config.S1)+'_'+str(config.S2)+'_'+str(config.balance_Nc)+'_'+config.eta_similarity+'_'+str(datetime.now())
+        #config.balance_Nc = False # Testing
+        exp_name = config.model_type+'_'+str(config.K)+'_'+str(config.S1)+'_'+str(config.S2)+'_'+config.Nc_type+'_'+config.eta_similarity+'_'+str(datetime.now())
         #exp_name = config.model_type+'_Nc'+str(config.Nc)+'_K'+str(config.K)+'_S1'+str(config.S1)+'_S2'+str(config.S2)+'_'+str(datetime.now())#str(uuid.uuid4())
     else:
         exp_name = config.model_type+'_'+config.atlas_name+str(config.n_rois)+'_'+str(datetime.now())#str(uuid.uuid4())
@@ -31,6 +32,8 @@ def main(config):
         config.maxiter_gibbs = 400
         config.use_convergence_criteria = False
         
+    config.use_convergence_criteria = True # TESTING
+    config.threshold_annealing = False # TESTING
     print(config)
         
     # log file with specifications for experiment:
@@ -43,7 +46,7 @@ def main(config):
             f.write(f"K: {config.K}\n")
             f.write(f"S1: {config.S1}\n")
             f.write(f"S2: {config.S2}\n")
-            f.write(f"balance_Nc: {config.balance_Nc}\n")
+            f.write(f"Nc_type: {config.Nc_type}\n")
             f.write(f"eta_similarity: {config.eta_similarity}\n")
             f.write(f"model_type: {config.model_type}\n")
             f.write(f"splitmerge: {config.splitmerge}\n")
@@ -92,7 +95,7 @@ if __name__ == '__main__':
     parser.add_argument('--K', type=int, default=5, help='number of clusters (synthetic data)')
     parser.add_argument('--S1', type=int, default=5, help='number of graphs of type 1 (synthetic data)')
     parser.add_argument('--S2', type=int, default=5, help='number of graphs of type 2 (synthetic data)')
-    parser.add_argument('--balance_Nc', type=bool, default=False, help='if size of clusters (no. of nodes in each cluster) should be balanced or not (True/False)')
+    parser.add_argument('--Nc_type', type=str, default='unbalanced', help='balanced or unbalanced no. of nodes in each cluster')
     parser.add_argument('--eta_similarity', type=str, default='comp_diff', help='same, comp_diff or part_diff (how similar eta1 and eta2 should be)')
 
         # MRI data configurations (fMRI and/or dMRI)

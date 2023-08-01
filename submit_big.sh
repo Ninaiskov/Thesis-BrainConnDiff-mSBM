@@ -14,4 +14,4 @@
 source ~/miniconda3/bin/activate
 conda activate speciale
 
-python3 main.py --dataset synthetic --maxiter_gibbs 100 --K 10 --S1 10 --balance_Nc False --eta_similarity part_diff --model_type nonparametric --noc 20
+python3 finalresults.py

@@ -9,16 +9,17 @@ from nilearn.maskers import NiftiLabelsMasker
 import nilearn.connectome
 from nilearn import plotting as nplt
 import scipy.io
+from helper_functions import butter_bandpass_filter
 
 ################################################## INITIALIZATION #######################################################
-dataset = 'hcp' # dataset to generate graphs from: 'hcp' or 'decnef
+dataset = 'decnef' # dataset to generate graphs from: 'hcp' or 'decnef
 
 # atlas_name = name of nilearn atlas for brain parcellation
 # n_rois = number of ROIs in atlas (default n_rois = 400 for schaefer)
 # threshold = used for thresholding correlations to create binary adjacency matrices (0 is chosen based on histogram, but not optimal)
 
 atlas_name = 'schaefer'
-n_rois = 100
+n_rois = 300
 
 start_time = time.time()
 
@@ -31,7 +32,7 @@ if dataset == 'decnef':
     healthy_ids = np.load(os.path.join(my_dir, 'data/healthy_ids.npy'), allow_pickle=True)
     schizo_ids = np.load(os.path.join(my_dir, 'data/schizo_ids.npy'), allow_pickle=True)
     sublist = np.concatenate((healthy_ids, schizo_ids)).tolist()
-    #sublist.sort() # sort alphabetically (or keep order as healthy subs first and the schizo subs)
+    #sublist.sort() # sort alphabetically (or keep order as healthy subs first and then schizo subs)
     
     # define atlas
     atlas = ni.datasets.fetch_atlas_schaefer_2018(n_rois=n_rois)
@@ -46,7 +47,7 @@ else:
     print('Unknown dataset')
 save_folder = atlas_name+str(n_rois)
 
-save_dir = os.path.join(my_dir, 'data/'+dataset+'/'+save_folder)
+save_dir = os.path.join(my_dir, 'data', dataset, save_folder)
 if not os.path.exists(save_dir):
     os.mkdir(save_dir)
         
@@ -69,10 +70,14 @@ def get_corr(dataset, data_dir, sub, atlas, conn):
         # extract time series: masker.transform(fmri)
         time_series = masker.transform(fmri, confounds = global_signal)
         
+        # high pass filter time series using butter bandpass filter
+        tr = fmri.header.get_zooms()[-1] # resolution is in header (last dimension is "tr = time resolution": in seconds)
+        time_series_filt = butter_bandpass_filter(time_series.T, fs=1/tr).T
+        
         # compute correlation between timeseries
-        corr_mat = conn.fit_transform([time_series]) # correlation matrix
+        corr_mat = conn.fit_transform([time_series_filt]) # correlation matrix
         corr_mat = np.triu(corr_mat, k=1)[0] # correlations from upper triangular matrix (including zeroes below diagonal)
-    
+        
     elif dataset == 'hcp':
         if sub < 250: # load fmri
             corr_cell = scipy.io.loadmat(data_dir+atlas_name+str(n_rois)+'/corr'+str(n_rois)+'_fmri.mat')['A'][0]

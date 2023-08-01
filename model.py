@@ -182,8 +182,8 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 self.sample['iter'].append(self.it) # maybe don't save
                 #self.sample['Z'].append(self.Z) # maybe dont' save
                 self.sample['noc'].append(self.noc)
-                #self.sample['logP_A'].append(self.logP_A) # logP_A|Z (log likelihood)
-                #self.sample['logP_Z'].append(self.logP_Z) # logP_Z (log prior)
+                self.sample['logP_A'].append(self.logP_A) # logP_A|Z (log likelihood)
+                self.sample['logP_Z'].append(self.logP_Z) # logP_Z (log prior)
                 self.sample['logP'].append(logP) # logP_Z|A (log likelihood + log prior)
                 #self.sample['eta'].append(self.eta) # maybe dont' save
                 #self.sample['alpha'].append(self.alpha) # maybe dont' save
@@ -484,7 +484,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         return Z, logP_A, logP_Z
 
 
-    def sample_alpha(self):
+    def sample_alpha(self): # MH sampler for alpha
         # sample hyperparameter: "concentration parameter" / "rate of generating new clusters" used in CRP dist., imposes improper uniform prior, Metropolis Hastings
         if self.matlab_compare:
             randnalpha_list = scipy.io.loadmat('matlab_randvar/randnalpha.mat')['randnalpha_list'].ravel() # TESTING
@@ -520,7 +520,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         # print('accepted ' + str(accept) + ' out of ' + str(self.maxiter_gibbs) + ' samples for alpha')
 
 
-    def sample_eta0(self):
+    def sample_eta0(self): # MH sampler for eta0
         if self.matlab_compare:
             randneta0_list = scipy.io.loadmat('matlab_randvar/randneta0.mat')['randneta0_list'].ravel() # TESTING
             randeta0_list = scipy.io.loadmat('matlab_randvar/randeta0.mat')['randeta0_list'].ravel() # TESTING
@@ -543,6 +543,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                     randneta0 = randneta0_list[i] # TESTING
                 else:
                     randneta0 = np.random.randn() # Normally distributed random variable
+                # generate candidate sample eta0 by adding noise (en from standard deviation) to current eta0
                 eta_new = np.exp(np.log(self.eta0[s]) + 0.1 * randneta0)  # symmetric proposal distribution in log-domain (use change of variable in acceptance rate alpha_new/alpha)
                 eta0_new = self.eta0.copy()
                 eta0_new[s] = eta_new
@@ -554,11 +555,12 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 #if self.unit_test:
                 #    self.unit_test_MH_eta0(eta0_new = eta0_new, logP_A_new = logP_A_new, logP_A = self.logP_A)
                 
+                # randeta0 is u_k
                 if self.matlab_compare:
                     randeta0 = randeta0_list[i]
                 else:
                     randeta0 = np.random.rand()
-                if randeta0 < (eta_new/self.eta0[s]) * np.exp(logP_A_new - self.logP_A):
+                if randeta0 < (eta_new/self.eta0[s]) * np.exp(logP_A_new - self.logP_A): # r_p = logP_A_new - self.logP_A
                     self.eta0[s] = eta_new
                     self.logP_A = logP_A_new
                     n_link = n_link_new
@@ -607,6 +609,10 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         #    ZAZt[:,:,s] = ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s] 
         ZAZt = np.stack([self.Z @ self.A[:,:,s] @ self.Z.T for s in range(self.S)], axis=2) # alternative
         ZAZt = np.stack([ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s] for s in range(self.S)], axis=2) # alternative
+        
+        # OBS! ZAZt is actually just n_link
+        # n_link = np.stack([Z @ self.A[:, :, s] @ Z.T for s in range(self.S)], axis=2) # alternative
+        #n_link = np.stack([n_link[:, :, s] - 0.5 * np.diag(np.diag(n_link[:, :, s])) + self.eta0[s] for s in range(self.S)], axis=2) # alternativ
           
         sum_ZAZt = np.sum(ZAZt, axis=2)
         self.eta = ZAZt/sum_ZAZt[:,:,np.newaxis]

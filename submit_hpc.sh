@@ -1,26 +1,25 @@
 #!/bin/sh 
 ### General options 
 ### -- specify queue -- 
-#BSUB -q gpuv100
+#BSUB -q hpc
 ### -- set the job Name -- 
 #BSUB -J hpc_job
 ### -- ask for number of cores (default: 1) -- 
-#BSUB -n 2
+#BSUB -n 1
 ### -- specify that the cores must be on the same host -- 
 #BSUB -R "span[hosts=1]"
-### -- For requesting a GPU with 32GB of memory, then please add a
-#BSUB -R "select[gpu32gb]"
-### -- specify that we need 2GB of memory per core/slot -- 
-#BSUB -R "rusage[mem=32GB]"
+### -- specify that we need 3GB of memory per core/slot -- 
+#BSUB -R "rusage[mem=3GB]"
+### -- specify that we want the job to get killed if it exceeds 3 GB per core/slot -- 
+#BSUB -M 3GB
 ### -- set walltime limit: hh:mm -- 
-#BSUB -W 24:00
-#BSUB -gpu "num=1"
+#BSUB -W 24:00 
 ### -- set the email address -- 
 # please uncomment the following line and put in your e-mail address,
 # if you want to receive e-mail notifications on a non-default address
 ##BSUB -u
 ### -- send notification at start -- 
-#BSUB -B
+#BSUB -B 
 ### -- send notification at completion -- 
 #BSUB -N 
 ### -- Specify the output and error file. %J is the job-id -- 
@@ -34,4 +33,4 @@
 source ~/miniconda3/bin/activate
 conda activate speciale
 
-python3 main.py --dataset synthetic --maxiter_gibbs 100 --Nc 100 --K 10 --model_type nonparametric --noc 50
+python3 finalresults.py
