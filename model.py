@@ -12,6 +12,7 @@ from scipy.special import gammaln, gamma
 import time
 import scipy.io
 from helper_functions import compute_A#, generate_syndata
+from sparse import load_npz
 
 os.environ["OMP_NUM_THREADS"] = "2"  # set number of threads
 
@@ -86,7 +87,9 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         self.sample = {'iter': [], 'Z': [], 'noc': [], 'logP_A': [], 'logP_Z': [], 'logP': [], 'eta': [], 'alpha': [], 'eta0': []}
         
         # Load data (generate N x N x S adjacency matrix, A)
-        self.load_data()
+        #self.load_data() # data loader used for master thesis
+        #self.A = load_npz('data/hcp_article/A_syn.npz') # testing synthetic sparse article data
+        self.load_articledata()
         
         # Initialize variables
         self.N, _, self.S = self.A.shape # shape of adjacency matrix: N = number of nodes (size), S = number of graphs/subjects
@@ -156,7 +159,7 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
             
             self.sumZ = np.sum(self.Z, axis=1) # no. nodes in each cluster
             ind = np.argsort(-self.sumZ) # sort clusters by size (descending)
-            self.Z = self.Z[ind,:] # sort partion matrix by cluster size
+            self.Z = self.Z[ind,:] # sort partition matrix by cluster size
             self.noc = self.Z.shape[0]
             
             # Sample alpha
@@ -234,9 +237,15 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         #for s in range(self.S): # for each subject
         #    n_link[:, :, s] = Z @ self.A[:, :, s] @ Z.T # clever way to extract all the relevant links for each pair of clusters
         #    n_link[:, :, s] = n_link[:, :, s] - 0.5 * np.diag(np.diag(n_link[:, :, s])) + self.eta0[s] # subtracting half of the diagonal from the diagonal (since we actually count the diognal twice in the line above) and adding the probability of linking between clusters  
-        n_link = np.stack([Z @ self.A[:, :, s] @ Z.T for s in range(self.S)], axis=2) # alternative
+        
+        #n_link = np.stack([Z @ self.A[:, :, s] @ Z.T for s in range(self.S)], axis=2) # alternative
+        n_link = np.stack([self.Z[None] @ self.A.T @ self.Z.T[None]], axis=2).squeeze().T # NEW alternative
         n_link = np.stack([n_link[:, :, s] - 0.5 * np.diag(np.diag(n_link[:, :, s])) + self.eta0[s] for s in range(self.S)], axis=2) # alternative
-
+        
+        #np.save('A_test.npy',self.A)
+        #np.save('Z_test.npy',Z)
+        #np.save('n_link_test.npy',n_link)
+        
         mult_eval = self.multinomialln(n_link) # compute (multinomial) log likelihood of number of links between clusters, log Beta(nlink+eta0)
         for i in JJ: # for each node (in random permutated order)
             # Remove effect of node i in partion, i.e. Z[:,i]
@@ -529,7 +538,9 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         #for s in range(self.S):
         #    n_link_noeta0[:,:,s] = self.Z @ self.A[:,:,s] @ self.Z.T
         #    n_link_noeta0[:,:,s] = n_link_noeta0[:,:,s] - 0.5 * np.diag(np.diag(n_link_noeta0[:,:,s]))
-        n_link_noeta0 = np.stack([self.Z @ self.A[:, :, s] @ self.Z.T for s in range(self.S)], axis=2) # alternative
+        
+        #n_link_noeta0 = np.stack([self.Z @ self.A[:, :, s] @ self.Z.T for s in range(self.S)], axis=2) # alternative
+        n_link_noeta0 = np.stack([self.Z[None] @ self.A.T @ self.Z.T[None]], axis=2).squeeze().T # NEW alternative
         n_link_noeta0 = np.stack([n_link_noeta0[:, :, s] - 0.5 * np.diag(np.diag(n_link_noeta0[:, :, s])) for s in range(self.S)], axis=2) # alternative
 
         n_link = n_link_noeta0 + self.eta0
@@ -595,6 +606,13 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
                 self.A = compute_A(A_vals_list, self.n_rois)
             else:
                 print('Unknown dataset')
+    
+    def load_articledata(self):
+        data_path = os.path.join(self.main_dir, 'data/'+self.dataset)
+        A_fmri = scipy.sparse.load_npz(os.path.join(data_path,'fmri_sparse.npz')).toarray()
+        A_dmri = scipy.sparse.load_npz(os.path.join(data_path,'dmri_sparse.npz')).toarray()
+        self.A = np.stack([A_fmri, A_fmri, A_fmri, A_fmri, A_fmri,
+                           A_dmri, A_dmri, A_dmri, A_dmri, A_dmri], axis=-1)
             
             
 ############################################################### Model evaluation functions ###############################################################
@@ -607,7 +625,8 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         #for s in range(self.S):
         #    ZAZt[:,:,s] = self.Z @ self.A[:,:,s] @ self.Z.T
         #    ZAZt[:,:,s] = ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s] 
-        ZAZt = np.stack([self.Z @ self.A[:,:,s] @ self.Z.T for s in range(self.S)], axis=2) # alternative
+        #ZAZt = np.stack([self.Z @ self.A[:,:,s] @ self.Z.T for s in range(self.S)], axis=2) # alternative
+        ZAZt = np.stack([self.Z[None] @ self.A.T @ self.Z.T[None]], axis=2).squeeze().T # NEW alternative
         ZAZt = np.stack([ZAZt[:,:,s] - 0.5 * np.diag(np.diag(ZAZt[:,:,s])) + self.eta0[s] for s in range(self.S)], axis=2) # alternative
         
         # OBS! ZAZt is actually just n_link
@@ -627,7 +646,8 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         #for s in range(self.S): # for each subject
         #    n_link[:, :, s] = Z @ self.A[:, :, s] @ Z.T # clever way to extract all the relevant links for each pair of clusters
         #    n_link[:, :, s] = n_link[:, :, s] - 0.5 * np.diag(np.diag(n_link[:, :, s])) + eta0[s] # subtracting half of the diagonal from the diagonal (since we actually count the diognal twice in the line above) and adding the probability of linking between clusters
-        n_link = np.stack([Z @ self.A[:, :, s] @ Z.T for s in range(self.S)],axis=2) # alternative
+        #n_link = np.stack([Z @ self.A[:, :, s] @ Z.T for s in range(self.S)],axis=2) # alternative
+        n_link = np.stack([self.Z[None] @ self.A.T @ self.Z.T[None]], axis=2).squeeze().T # NEW alternative
         n_link = np.stack([n_link[:, :, s] - 0.5 * np.diag(np.diag(n_link[:, :, s])) + eta0[s] for s in range(self.S)], axis=2) # alternative
        
         mult_eval = self.multinomialln(n_link) # compute (multinomial) log likelihood of number of links between clusters 
