@@ -15,7 +15,25 @@ import scipy.io
 from helper_functions import compute_A#, generate_syndata
 #from sparse import load_npz
 
-os.environ["OMP_NUM_THREADS"] = "2"  # set number of threads
+os.environ["OMP_NUM_THREADS"] = "10"  # set number of threads
+
+## numba code for matrix multiplication between parallel csr sparse matrix A and dense matrix B
+# wrapper with initialization of result array
+def spdenmatmul(A, B):
+    out = np.zeros((A.shape[0],B.shape[1]),B.dtype)
+    spmatmul(A.data, A.indptr, A.indices, B, out)
+    return out
+
+# parallel sparse matrix multiplication, note that the array is incremented
+# multiple runs will there sum up not reseting the array in-between
+# possibly types can be added for potential extra speedup
+@njit(parallel=True, fastmath=True, nogil=True, cache=True)
+def spmatmul(A, iA, jA, B, out):
+    for i in prange(out.shape[0]):
+        for j in range(iA[i], iA[i+1]):
+            for k in range(out.shape[1]):
+                out[i, k] += A[j] * B[jA[j], k]
+
 
 class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to MultinomialSBM
     # Non-parametric IRM of uni-partite undirected graphs based on collapsed Gibbs sampling
@@ -606,26 +624,11 @@ class MultinomialSBM(object): # changed name from IRMUnipartiteMultinomial to Mu
         '''
             
 ############################################################### Model evaluation functions ###############################################################
-    ## numba code for matrix multiplication between parallel csr sparse matrix A and dense matrix B
-    # wrapper with initialization of result array
-    def spdenmatmul(A,B):
-        out = np.zeros((A.shape[0],B.shape[1]),B.dtype)
-        spmatmul(A.data, A.indptr, A.indices, B, out)
-        return out
 
-    # parallel sparse matrix multiplication, note that the array is incremented
-    # multiple runs will there sum up not reseting the array in-between
-    # possibly types can be added for potential extra speedup
-    @njit(parallel=True, fastmath=True, nogil=True, cache=True)
-    def spmatmul(A, iA, jA, B, out):
-        for i in prange(out.shape[0]):
-            for j in range(iA[i], iA[i+1]):
-                for k in range(out.shape[1]):
-                    out[i, k] += A[j] * B[jA[j], k]
-    
     def compute_n_link(self, Z, noc, add_eta0, eta0):
         #n_link = np.stack([Z @ self.A[:, :, s] @ Z.T for s in range(self.S)],axis=2) # used for stacked 3D array of dense matric
-        n_link = np.stack([Z @ As @ Z.T for As in self.A],axis=2) # used for list of scipy sparse csr matrix
+        #n_link = np.stack([Z @ As @ Z.T for As in self.A],axis=2) # used for list of scipy sparse csr matrix
+        n_link = np.stack([Z @ spdenmatmul(As, Z.T) for As in self.A],axis=2) # used for list of scipy sparse csr matrix (NEW numba version)
         #n_link = (Z[None] @ self.A.T @ Z.T[None]).T # used for sparse 3D COO matrix
         if add_eta0:
             n_link = n_link - 0.5 * np.eye(noc)*n_link + eta0[:,None,None]
